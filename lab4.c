@@ -13,14 +13,14 @@
 #define MAXSTANDCOUNTER 2
 
 
-//pthread_mutex_t stand_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t judge_in_in_the_hall_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t stand_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t judge_in_the_hall_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t citi_in_hall_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t swearing_immi_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int immi_in_hall, citi_in_hall, immi_in_stand, sweared_immi, max_stand_counter;
 
-int judge_is_in_da_town;
+int judge_is_in_hall;
 
 typedef void* (*thread_func) (void* arg);
 
@@ -38,12 +38,12 @@ void immigrant();
 
 int main()
 {
-	immi_in_hall = citi_in_hall = immi_in_stand = judge_is_in_da_town = sweared_immi = max_stand_counter = 0;
+	immi_in_hall = citi_in_hall = immi_in_stand = judge_is_in_hall = sweared_immi = max_stand_counter = 0;
 	int i = 0;
 
-	printf("Enter max stand quantity.\n");
+	printf("Введите кол-во стоек.\n");
 	scanf("%d", &max_stand_counter);
-	printf("It is %d\n", max_stand_counter);
+	printf("Кол-во стоек: %d\n", max_stand_counter);
 
 	sem_init(&sem, 0, max_stand_counter);
 
@@ -70,14 +70,14 @@ void judge()
 		sleep(limited_random(30));
 
 		//judge is trying to come to hall
-		printf("Judge wanna enter the hall.\n");
+		printf("Судью хочет войти в зал.\n");
 		while(immi_in_stand != 0);//wait till there will be no immigrants
 
-		pthread_mutex_lock(&judge_in_in_the_hall_mutex);
+		pthread_mutex_lock(&judge_in_the_hall_mutex);
 		
-		judge_is_in_da_town=1;
+		judge_is_in_hall=1;
 		pthread_mutex_lock(&citi_in_hall_mutex);
-		printf("Judge is in the hall.\n %d immigrants in the hall, %d citizens in the hall.\n", immi_in_hall, citi_in_hall);
+		printf("Судья в зале.\n %d иммгрантов в зале, %d горожан в зале.\n", immi_in_hall, citi_in_hall);
     	pthread_mutex_unlock(&citi_in_hall_mutex);
     	sleep(limited_random(15));
 
@@ -88,12 +88,12 @@ void judge()
     	sweared_immi  = 0;
     	pthread_mutex_unlock(&swearing_immi_mutex);
 
-    	printf("Judge is about to leave.\n");
+    	printf("Судья у выхода.\n");
 
-    	judge_is_in_da_town = 0;
+    	judge_is_in_hall = 0;
 
-    	printf("Judge leaves the hall.\n");
-    	pthread_mutex_unlock(&judge_in_in_the_hall_mutex);		
+    	printf("Судья ушел.\n");
+    	pthread_mutex_unlock(&judge_in_the_hall_mutex);		
     	
 
     	
@@ -105,24 +105,24 @@ void citizen()
 
 
 	while(1)
-	{//syscall(SYS_gettid)
+	{
 		sleep(limited_random(30));
 
-		printf("Citizen %ld wanna enter the hall.\n", syscall(SYS_gettid));
+		printf("Гражданин %ld хочет войти в зал.\n", syscall(SYS_gettid));
 
-		pthread_mutex_lock(&judge_in_in_the_hall_mutex);
+		pthread_mutex_lock(&judge_in_the_hall_mutex);
 		pthread_mutex_lock(&citi_in_hall_mutex);
 		citi_in_hall++;
-		printf("Citizen %ld came to the hall.\n %d immigrants in the hall, %d citizens in the hall.\n", syscall(SYS_gettid), immi_in_hall, citi_in_hall);
+		printf("Гражданин %ld вошел в зал.\n %d иммигрантов в зале, %d граждан в зале.\n", syscall(SYS_gettid), immi_in_hall, citi_in_hall);
     	pthread_mutex_unlock(&citi_in_hall_mutex);
-    	pthread_mutex_unlock(&judge_in_in_the_hall_mutex);		
+    	pthread_mutex_unlock(&judge_in_the_hall_mutex);		
 
     	sleep(limited_random(30));
 
     	pthread_mutex_lock(&citi_in_hall_mutex);
 		citi_in_hall--;
-		printf("Citizen %ld left the hall.\n", syscall(SYS_gettid));
-    	pthread_mutex_unlock(&citi_in_hall_mutex);		
+		printf("Гражданин %ld покинул зал.\n", syscall(SYS_gettid));
+    	pthread_mutex_unlock(&citi_in_hall_mutex);
 	}
 }
 
@@ -130,52 +130,53 @@ void immigrant()
 {
 	int im_in_the_hall = 0;
 
-	long tid = syscall(SYS_gettid) - (long) 2800;
-
 	sleep(limited_random(30));
 
-	printf("Immigrant %ld wanna enter the hall.\n", syscall(SYS_gettid));
+	printf("Иммигрант %ld хочет войти в зал.\n", syscall(SYS_gettid));
 
+	// enter immi in hall
 	do{
 	
-		pthread_mutex_lock(&judge_in_in_the_hall_mutex);
+		pthread_mutex_lock(&judge_in_the_hall_mutex);
 		if(immi_in_hall < MAXIMMINUM)
 		{
 			immi_in_hall++;
 			im_in_the_hall = 1;
 			pthread_mutex_lock(&citi_in_hall_mutex);
-			printf("Immigrant %ld came to the hall.\n %d immigrants in the hall, %d citizens in the hall.\n", syscall(SYS_gettid), immi_in_hall, citi_in_hall);
+			printf("Иммигрант %ld вошел в зал.\n %d иммигрантов в зале, %d граждан в зале.\n", syscall(SYS_gettid), immi_in_hall, citi_in_hall);
     		pthread_mutex_unlock(&citi_in_hall_mutex);
     	}
-    	pthread_mutex_unlock(&judge_in_in_the_hall_mutex);
+    	pthread_mutex_unlock(&judge_in_the_hall_mutex);
 	}while (!im_in_the_hall);
     
     //wait for the judge
-    while(!judge_is_in_da_town);
+	while(!judge_is_in_hall);
+	
     //swear
     pthread_mutex_lock(&swearing_immi_mutex);
-    sleep(limited_random(15));
+    sleep(limited_random(15)); //swearing...
     sweared_immi++;
     immi_in_stand++;
-    printf("Immigrant %ld sweared to be a good citizen. \nImmigrants to swear left: %d \n", syscall(SYS_gettid), immi_in_hall - sweared_immi);
+    printf("Иммигрант %ld принял гражданство. \nИммигрантов для принятия гражданства: %d \n", syscall(SYS_gettid), immi_in_hall - sweared_immi);
     
     pthread_mutex_unlock(&swearing_immi_mutex);
 
     //go to stand as soon as judge leaves the hall
 
     //wait for the judge to leave
-    while(judge_is_in_da_town);
+    while(judge_is_in_hall);
 
-    sem_wait(&sem);
-	printf("Immigrant %ld is having his papers prepared.\n", syscall(SYS_gettid));
-	sleep(limited_random(7));    
-    sem_post(&sem);
+    sem_wait(&sem); // max_stand_counter--
+	printf("Иммигрант %ld получил свою бумагу\n", syscall(SYS_gettid));
+	sleep(limited_random(7));
+    sem_post(&sem); // max_stand_counter++
 
-    pthread_mutex_lock(&judge_in_in_the_hall_mutex);
+	//exit
+    pthread_mutex_lock(&judge_in_the_hall_mutex);
     immi_in_hall--;
     immi_in_stand--;
-    printf("Immigrant %ld left the hall with his papers.\n", syscall(SYS_gettid));
-    pthread_mutex_unlock(&judge_in_in_the_hall_mutex);
+    printf("Иммигрант %ld покинул зал.\n", syscall(SYS_gettid));
+    pthread_mutex_unlock(&judge_in_the_hall_mutex);
 
 }
 
