@@ -20,6 +20,8 @@ pthread_mutex_t swearing_immi_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int immi_in_hall, citi_in_hall, immi_in_stand, sweared_immi, max_stand_counter;
 
+int immi_near_door, citi_near_door;
+
 int judge_is_in_hall;
 
 
@@ -37,7 +39,7 @@ void *immigrant();
 
 int main()
 {
-	immi_in_hall = citi_in_hall = immi_in_stand = judge_is_in_hall = sweared_immi = max_stand_counter = 0;
+	immi_in_hall = citi_in_hall = immi_in_stand = judge_is_in_hall = sweared_immi = max_stand_counter = immi_near_door = citi_near_door= 0;
 	int i = 0;
 
 	printf("Введите кол-во стоек.\n");
@@ -76,7 +78,8 @@ void *judge()
 		
 		judge_is_in_hall=1;
 		pthread_mutex_lock(&citi_in_hall_mutex);
-		printf("Судья в зале. %d иммгрантов в зале, %d граждан в зале.\n", immi_in_hall, citi_in_hall);
+		printf("Судья в зале. %d иммгрантов в зале, %d граждан в зале.", immi_in_hall, citi_in_hall);
+		printf("В очереди: %d иммигрантов, %d граждан.\n", immi_near_door, citi_near_door);
     	pthread_mutex_unlock(&citi_in_hall_mutex);
     	sleep(limited_random(15));
 
@@ -101,20 +104,28 @@ void *judge()
 
 void *citizen()
 {
-
+	int ci_in_hall=0;
 
 	while(1)
 	{
 		sleep(limited_random(30));
 
 		printf("Гражданин %ld хочет войти в зал.\n", syscall(SYS_gettid));
-
-		pthread_mutex_lock(&judge_in_the_hall_mutex);
-		pthread_mutex_lock(&citi_in_hall_mutex);
-		citi_in_hall++;
-		printf("Гражданин %ld вошел в зал. %d иммигрантов в зале, %d граждан в зале.\n", syscall(SYS_gettid), immi_in_hall, citi_in_hall);
-    	pthread_mutex_unlock(&citi_in_hall_mutex);
-    	pthread_mutex_unlock(&judge_in_the_hall_mutex);		
+		citi_near_door++;
+		do
+		{
+			if(!pthread_mutex_lock(&judge_in_the_hall_mutex))
+			{
+				pthread_mutex_lock(&citi_in_hall_mutex);
+				citi_near_door--;
+				citi_in_hall++;
+				ci_in_hall = 1;
+				printf("Гражданин %ld вошел в зал. %d иммигрантов в зале, %d граждан в зале. В очереди: %d иммигрантов, %d граждан.\n", syscall(SYS_gettid), immi_in_hall, citi_in_hall, immi_near_door, citi_near_door);
+    			pthread_mutex_unlock(&citi_in_hall_mutex);
+				pthread_mutex_unlock(&judge_in_the_hall_mutex);	
+			}
+			else { sleep(15); }
+		} while (!ci_in_hall);
 
     	sleep(limited_random(30));
 
@@ -132,20 +143,24 @@ void *immigrant()
 	sleep(limited_random(30));
 
 	printf("Иммигрант %ld хочет войти в зал.\n", syscall(SYS_gettid));
-
+	immi_near_door++;
 	// enter immi in hall
 	do{
 	
-		pthread_mutex_lock(&judge_in_the_hall_mutex);
-		if(immi_in_hall < MAXIMMINUM)
+		if(!pthread_mutex_trylock(&judge_in_the_hall_mutex))
 		{
-			immi_in_hall++;
-			im_in_the_hall = 1;
-			pthread_mutex_lock(&citi_in_hall_mutex);
-			printf("Иммигрант %ld вошел в зал. %d иммигрантов в зале, %d граждан в зале.\n", syscall(SYS_gettid), immi_in_hall, citi_in_hall);
-    		pthread_mutex_unlock(&citi_in_hall_mutex);
-    	}
-    	pthread_mutex_unlock(&judge_in_the_hall_mutex);
+			if(immi_in_hall < MAXIMMINUM)
+			{
+				immi_near_door--;
+				immi_in_hall++;
+				im_in_the_hall = 1;
+				pthread_mutex_lock(&citi_in_hall_mutex);
+				printf("Иммигрант %ld вошел в зал. %d иммигрантов в зале, %d граждан в зале. В очереди: %d иммигрантов, %d граждан.\n", syscall(SYS_gettid), immi_in_hall, citi_in_hall, immi_near_door, citi_near_door);
+    			pthread_mutex_unlock(&citi_in_hall_mutex);
+    		}
+			pthread_mutex_unlock(&judge_in_the_hall_mutex);
+		}
+		else { sleep(15); } 
 	}while (!im_in_the_hall);
     
     //wait for the judge
@@ -155,7 +170,7 @@ void *immigrant()
     pthread_mutex_lock(&swearing_immi_mutex);
     sleep(limited_random(15)); //swearing...
     sweared_immi++;
-    immi_in_stand++;
+	immi_in_stand++;
     printf("Иммигрант %ld принял гражданство. Иммигрантов для принятия гражданства: %d \n", syscall(SYS_gettid), immi_in_hall - sweared_immi);
     
     pthread_mutex_unlock(&swearing_immi_mutex);
